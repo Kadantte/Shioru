@@ -1,5 +1,5 @@
-const { Events, EmbedBuilder } = require('discord.js')
-const { submitNotification, initializeData } = require('../utils/databaseUtils')
+const { Events, EmbedBuilder } = require("discord.js");
+const { submitNotification } = require("../utils/databaseUtils");
 
 module.exports = {
   name: Events.StageInstanceCreate,
@@ -8,23 +8,22 @@ module.exports = {
     const stageInstanceCreateEmbed = new EmbedBuilder()
       .setTitle(
         stageInstance.client.i18n.t(
-          'events.stageInstanceCreate.stage_notification'
-        )
+          "events.stageInstanceCreate.stage_notification",
+        ),
       )
       .setDescription(
         stageInstance.client.i18n
-          .t('events.stageInstanceCreate.stage_instance_create')
-          .replace('%s', stageInstance.id)
+          .t("events.stageInstanceCreate.stage_instance_create")
+          .replace("%s", stageInstance.id),
       )
       .setTimestamp()
-      .setColor('Yellow')
+      .setColor("Yellow");
 
-    await initializeData(stageInstance.client, stageInstance.guild)
     await submitNotification(
       stageInstance.client,
       stageInstance.guild,
       Events.StageInstanceCreate,
-      stageInstanceCreateEmbed
-    )
+      stageInstanceCreateEmbed,
+    );
   },
-}
+};

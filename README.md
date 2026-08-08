@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/Maseshi/Shioru/main/assets/icons/apple-icon.png" width="100" alt="Shioru" />
+  <img src="https://raw.githubusercontent.com/Maseshi/Shioru/main/assets/icons/apple-touch-icon.png" width="100" alt="Shioru" />
   <strong>
     <h1>Shioru</h1>
     <p>Personal assistants in Discord that will help make your guild a better place.</p>
@@ -59,7 +59,7 @@ And many other interesting features...
 
 ## 🧩 Prerequisites
 
-- [Node.js](https://nodejs.org/) v18.0.0 or higher
+- [Node.js](https://nodejs.org/) v22.12.0 or higher
 - [Firebase Tools](https://firebase.google.com/docs/cli) (requires [Java](https://www.oracle.com/java/technologies/downloads/) v11.0.0 or higher)
 - [Build Tools](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022) (requires [Python](https://www.python.org/downloads/) v3.12.0 or higher)
 - [FFmpeg](https://ffmpeg.org/download.html)
@@ -67,28 +67,7 @@ And many other interesting features...
 
 ## ⌛ Installation
 
-### 1. Install **Build Tools**
-
-Install **Build tools** by running the following command according to your operating system.
-
-- For Linux and MacOS operating systems
-
-  ```sh
-  sudo apt update
-  sudo apt install build-essential
-  ```
-
-- For Windows operating system
-  ```sh
-  npm install --global --production --add-python-to-path windows-build-tools
-  ```
-
-> [!TIP]
-> You can skip this step by checking the **Automatically install the necessary tools** option through the Node.js installer as shown in the following image.
->
-> ![](https://raw.githubusercontent.com/Maseshi/Shioru/main/assets/images/node-js-tools-for-native-modules.png)
-
-### 2. Clone the bot and install the components.
+### 1. Clone the bot and install the components.
 
 - Launch a terminal and run the following command.
   ```bat
@@ -101,7 +80,7 @@ Install **Build tools** by running the following command according to your opera
 > [!NOTE]
 > You can edit some data in **config** at [./source/configs/data.js](./source/configs/data.js).
 
-### 3. Setup bot and invite to join.
+### 2. Setup bot and invite to join.
 
 - Go to [Discord Developer Portal](https://discord.com/developers/applications)
 - Click **"New Application"** and name your bot and accept the Discord policy rules.
@@ -110,7 +89,7 @@ Install **Build tools** by running the following command according to your opera
 - Invite your bot to the server by going to the **OAuth2 > URL Generator** page, selecting `bot` and `applications.commands`, selecting `Administrator`, then copy the link and paste it in the browser address bar. Your sir
   ![](https://raw.githubusercontent.com/Maseshi/Shioru/main/assets/images/discord-developer-portal-scopes.png)
 
-### 4. Setup database
+### 3. Setup database
 
 - Go to https://firebase.google.com/ and start setting up the project.
 - Add a new project and follow the steps.
@@ -118,6 +97,9 @@ Install **Build tools** by running the following command according to your opera
   ![](https://raw.githubusercontent.com/Maseshi/Shioru/main/assets/images/firebase-setup-web-application.png)
 - Firebase will provide you with information about its configuration. Apply these values to the file. `.env`
 - Go to **Build > [Realtime Database](https://console.firebase.google.com/u/0/project/_/database/data)** to create a database for storing data.
+- Enable the **Email/Password** provider in Firebase Authentication and create a dedicated account for the bot.
+- Add that account's UID at `/access/<uid>` with the boolean value `true` in Realtime Database, then set `AUTH_EMAIL` and `AUTH_PASSWORD` in `.env`. Add dashboard user UIDs to `/access` as well.
+- Firebase traffic metrics are logged locally every five minutes by default. Set `METRICS_LABEL` (for example, `before-cache` or `after-cache`) and compare equal-duration windows with similar workloads. Payload byte counts are estimates and do not include protocol overhead.
 
 ## 🔥 Get started
 
@@ -150,7 +132,7 @@ For actual use, the prepared command or set of commands can be used normally as 
 
   # or
 
-  npm start
+  npm run start
   ```
 
 - On Windows
@@ -160,26 +142,21 @@ For actual use, the prepared command or set of commands can be used normally as 
 
   @REM or
 
-  npm start
+  npm run start
   ```
 
 ### 🐳 Running on Docker
 
 This operation requires [Docker](https://www.docker.com/products/docker-desktop/)
 
-- Open the terminal and add all the necessary environmental variables.
-  - For Windows, use commands `set variable=example`
-  - For Linux or MacOS, use the command `export variable=example`
-- Create an image using the command `npm run docker:build` or `npm run docker:build:serve` for the serve mode and wait until the process is finished.
-- After creating the images successfully, run by using the command `npm run docker:build` or `npm run docker:build:serve` for the serve mode.
+- Copy `.env.example` to `.env` and replace the placeholders with your configuration.
+- Build and start the bot with `npm run docker:up`.
+- Follow its output with `npm run docker:logs`.
+- Stop and remove the container with `npm run docker:down`.
+
+The health endpoint is available locally at `http://127.0.0.1:3000/health` by default. Set `SHIORU_PORT` in `.env` to use another host port.
 
 [Learn more about commands Docker](https://docs.docker.com/reference/)
-
-## ⚡ Quick Troubleshooting
-
-- `gyp ERR! stack Error: not found: make`
-
-  This problem may be caused by **Build tools** being installed incorrectly or may not have been installed yet. This problem can be solved by looking at the [installation](#1-install-build-tools) section.
 
 ## 🌐 Improve Translate
 

@@ -4,6 +4,7 @@ node_modules/
 # Logs
 logs/
 *.log
+*-player-script.js
 
 # Environment
 .env
@@ -12,11 +13,8 @@ logs/
 .env.test.local
 .env.production.local
 
-# README
-NOTE.md
-
 # Back-ends
-.firebase
-.firebaserc
-firebase.json
-database.rules.json
+.firebase/
+firebase-debug.log
+database-debug.log
+firebase/.firebaserc

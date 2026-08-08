@@ -1,42 +1,60 @@
-# Github
+# Configurations
 .github/
-
-# VSCode
 .vscode/
 
-# Dependency directories
-node_modules/
+# Documents
+README.md
+LICENSE
+LICENSE-ASSETS
+documents/
 
 # Logs
 logs/
 *.log
 
-# Ignore
+# Dependency directories
+node_modules/
+
+# Ignore files
 .*ignore
+.gitignore
+.dockerignore
+.prettierignore
 
 # Docker
 Dockerfile*
 docker-compose*
 
-# Configs
-*.config.*
+# Linter/Formatter configs
+eslint.config.js
+prettier.config.js
+
+# PM2
+ecosystem.config.js
+
+# Scripts
+start.bat
+start.sh
 
 # Crowdin
 crowdin.yml
 
+# Assets (non-source)
+assets/
+
 # Environment
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# README
-README.md
-NOTE.md
+.env.*
+!.env.example
 
 # Back-ends
 .firebase
-.firebaserc
-firebase.json
-database.rules.json
+firebase/
+
+# Git
+.git/
+
+# Local tooling and test output
+.agents/
+.codex/
+coverage/

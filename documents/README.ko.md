@@ -1,11 +1,9 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/Maseshi/Shioru/main/assets/icons/apple-icon.png" width="100" alt="Shioru" />
-  <strong>
+  <img src="https://raw.githubusercontent.com/Maseshi/Shioru/main/assets/icons/apple-icon.png" width="100" alt="Shioru" /><strong>
     <h1>Shioru</h1>
     <p>เลขาส่วนตัวใน Discord ที่จะช่วยทำให้กิลด์ของคุณน่าอยู่ยิ่งขึ้น</p>
   </strong>
-  <p>
-    <a title="Discord.js v14" href="https://discord.js.org/">
+  <p><a title="Discord.js v14" href="https://discord.js.org/">
       <img src="https://img.shields.io/badge/discord.js-14-blue?logo=discord&logoColor=white&style=for-the-badge" alt="Discord.js v14" />
     </a>
     <a title="Last commit" href="https://github.com/Maseshi/Shioru/commits/">
@@ -25,8 +23,7 @@
       <img src="https://top.gg/api/widget/upvotes/704706906505347183.svg" alt="Top.gg" />
     </a>
   </p>
-  <p>
-    <a href="https://shiorus.web.app/invite">Add App</a>
+  <p><a href="https://shiorus.web.app/invite">Add App</a>
     ·
     <a href="https://github.com/Maseshi/Shioru/tree/main/documents">Switch Languages</a>
     ·
@@ -67,27 +64,7 @@
 
 ## ⌛ การติดตั้ง
 
-### 1. ติดตั้ง **Build Tools**
-
-ทำการติดตั้ง **Build tools** โดยรันคำสั่งดังต่อไปนี้ตามระบบปฏิบัติการของคุณ
-
-- สำหรับระบบปฏิบัติการ Linux และ MacOS
-
-  ```sh
-  sudo apt update
-  sudo apt install build-essential
-  ```
-
-- สำหรับระบบปฏิบัติการ Windows
-  ```sh
-  npm install --global --production --add-python-to-path windows-build-tools
-  ```
-
-> [!TIP] คุณสามารถข้ามขั้นตอนนี้โดยการติ๊กตัวเลือก **Automatically install the necessary tools.** ผ่านตัวติดตั้ง Node.js ดังภาพต่อไปนี้
-> 
-> ![](https://raw.githubusercontent.com/Maseshi/Shioru/main/assets/images/node-js-tools-for-native-modules.png)
-
-### 2. โคลนบอทและติดตั้งส่วนประกอบ
+### 1. โคลนบอทและติดตั้งส่วนประกอบ
 
 - 터미널을 실행하고 다음 명령을 실행합니다.
   ```bat
@@ -97,16 +74,18 @@
   ```
 - 파일 `.env.example` 의 이름을 `.env` 으로 바꾸고 필요한 모든 값을 삽입합니다.
 
-> [!NOTE] คุณสามารถแก้ไขข้อมูลบางอย่างใน **config** ที่ [./source/configs/data.js](../source/configs/data.js)
+> [!NOTE]
+>
+> คุณสามารถแก้ไขข้อมูลบางอย่างใน **config** ที่ [./source/configs/data.js](../source/configs/data.js)
 
-### 3. ตั้งค่าบอทและเชิญเข้าร่วม
+### 2. ตั้งค่าบอทและเชิญเข้าร่วม
 
 - Discord 개발자 포털로 이동
 - **"새 애플리케이션"** 클릭하고 봇에 이름을 지정하고 Discord 정책 규칙을 수락합니다.
 - ไปที่หน้า **"Bot"** และเปิดใช้งานตัวเลือกทั้งหมดในส่วน **Privileged Gateway Intent** ![](https://raw.githubusercontent.com/Maseshi/Shioru/main/assets/images/discord-developer-portal-privileged-gateway-intents.png)
 - เชิญบอทของคุณไปที่เซิร์ฟเวอร์โดยไปที่หน้า **OAuth2 > URL Generator** เลือก `bot` และ `applications.commands` เลือก `Administrator` จากนั้นคัดลอกลิงก์และวางในแถบที่อยู่ของเบราว์เซอร์ของคุณ ![](https://raw.githubusercontent.com/Maseshi/Shioru/main/assets/images/discord-developer-portal-scopes.png)
 
-### 4. ตั้งค่าฐานข้อมูล
+### 3. ตั้งค่าฐานข้อมูล
 
 - https://firebase.google.com/으로 이동하여 프로젝트 설정을 시작합니다.
 - 새 프로젝트를 추가하고 단계를 따릅니다.
@@ -131,7 +110,9 @@
   - สำหรับ Linux หรือ MacOS ใช้คำสั่ง `export variable=example`
 - รันคำสั่ง `npm run serve`
 
-> [!NOTE] คุณจะเข้าสู่โหมดการพัฒนาโดยอัตโนมัติเนื่องจากเป็นการจำลองการใช้งานจริง ข้อมูลทั้งหมดจะไม่ได้รับการบันทึก
+> [!NOTE]
+>
+> คุณจะเข้าสู่โหมดการพัฒนาโดยอัตโนมัติเนื่องจากเป็นการจำลองการใช้งานจริง ข้อมูลทั้งหมดจะไม่ได้รับการบันทึก
 
 ### 🍵 ใช้งานจริง
 
@@ -168,12 +149,6 @@
 - หลังจากสร้างอิมเมจสำเร็จแล้วให้รันโดยใช้คำสั่ง `npm run docker:run` หรือ `npm run docker:build:serve` สำหรับโหมดจำลอง
 
 [เรียนรู้เพิ่มเติมเกี่ยวกับคำสั่ง Docker](https://docs.docker.com/reference/)
-
-## ⚡ แก้ไขปัญหาอย่างรวดเร็ว
-
-- `gyp ERR! stack Error: not found: make`
-
-  ปัญหานี้อาจเกิดจาก **Build Tools** ติดตั้งไม่ถูกต้องหรืออาจยังไม่ได้ติดตั้ง วิธีแก้ไขปัญหานี้ให้ดูที่ส่วน[การติดตั้ง Build Tools](#1-ติดตั้ง-build-tools)
 
 ## 🌐 ปรับปรุงการแปลภาษา
 

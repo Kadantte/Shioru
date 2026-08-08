@@ -4,108 +4,156 @@ const {
   Events,
   ActivityType,
   PresenceUpdateStatus,
-} = require('discord.js')
-const { getApps } = require('firebase/app')
+} = require("discord.js");
+const { getApps } = require("firebase/app");
+const { getDatabase, ref, child } = require("firebase/database");
+const { registeringCommands, webhookSend } = require("../utils/clientUtils");
+const { colorize } = require("../utils/consoleUtils");
 const {
-  getDatabase,
-  onValue,
-  ref,
-  child,
-  update,
-  get,
-  set,
-} = require('firebase/database')
-const { registeringCommands, webhookSend } = require('../utils/clientUtils')
-const { colorize } = require('../utils/consoleUtils')
-const { dataStructures, fetchStatistics } = require('../utils/databaseUtils')
-const { currencyFormatter, newTitle } = require('../utils/miscUtils')
+  dataStructures,
+  fetchStatistics,
+  synchronizeGuildData,
+} = require("../utils/databaseUtils");
+const { watchGuildData } = require("../utils/cacheUtils");
+const {
+  logMetrics,
+  trackedOnValue: onValue,
+  trackedSet: set,
+  trackedUpdate: update,
+} = require("../utils/metricsUtils");
+const { currencyFormatter, newTitle } = require("../utils/miscUtils");
 
 module.exports = {
   name: Events.ClientReady,
   once: true,
   async execute(client) {
-    const { underscore } = colorize()
+    const { underscore } = colorize();
+    const registerInterval = (callback, delay) => {
+      const interval = setInterval(callback, delay);
+      client.temp.intervals.add(interval);
+      return interval;
+    };
 
     // Notify when the bot is online.
     client.logger.info(
-      `Bot is now online at ${client.readyAt.toLocaleString()}.`
-    )
+      `Bot is now online at ${client.readyAt.toLocaleString()}.`,
+    );
+
+    if (client.configs.metrics.enabled) {
+      registerInterval(
+        () => logMetrics("interval"),
+        client.configs.metrics.intervalMs,
+      );
+      client.logger.info(
+        { intervalMs: client.configs.metrics.intervalMs },
+        "Firebase traffic metrics enabled.",
+      );
+    }
 
     // Client username
     client.logger.info(
-      `Sign in with the username ${underscore(client.user.username)}.`
-    )
+      `Sign in with the username ${underscore(client.user.username)}.`,
+    );
 
     // Refreshing application (/) commands.
-    registeringCommands(client)
+    registeringCommands(client);
 
     // Check back-ends server is set up.
-    if (!getApps.length) {
+    if (getApps().length) {
       // Fetch chat data on change and apply
-      client.logger.info('Fetching and updating chat data...')
+      client.logger.info("Fetching and updating chat data...");
 
-      const chatRef = ref(getDatabase(), 'chat')
+      const chatRef = ref(getDatabase(), "chat");
+      const baseConstants = require("../configs/constants.json");
 
       const updateChatData = (snapshot) => {
         if (snapshot.exists()) {
-          const prompts = snapshot.val().prompts ?? []
-          const replies = snapshot.val().replies ?? []
-          const alternatives = snapshot.val().alternatives ?? []
-          const scripts = snapshot.val().scripts ?? []
-          const system = snapshot.val().system ?? ''
+          const data = snapshot.val();
+          const conversations = Array.isArray(data.conversations)
+            ? data.conversations
+            : Object.values(data.conversations ?? {});
+          const alternatives = Array.isArray(data.alternatives)
+            ? data.alternatives
+            : Object.values(data.alternatives ?? {});
+          const system = data.system ?? "";
 
-          client.configs.constants.prompts = [
-            ...client.configs.constants.prompts,
-            ...prompts,
-          ]
-          client.configs.constants.replies = [
-            ...client.configs.constants.replies,
-            ...replies,
-          ]
+          client.configs.constants.conversations = [
+            ...baseConstants.conversations,
+            ...conversations,
+          ];
           client.configs.constants.alternatives = [
-            ...client.configs.constants.alternatives,
+            ...baseConstants.alternatives,
             ...alternatives,
-          ]
-          client.configs.constants.scripts = [
-            ...client.configs.constants.scripts,
-            ...scripts,
-          ]
-          client.configs.constants.system = system
+          ];
+          client.configs.constants.system = system;
         } else {
-          set(chatRef, dataStructures(client, 'chat'))
+          set(chatRef, dataStructures(client, "chat"));
         }
+      };
+
+      const unsubscribeChat = onValue(chatRef, (snapshot) =>
+        updateChatData(snapshot),
+      );
+      client.temp.listeners.set("chat", unsubscribeChat);
+
+      client.logger.info("Chat data retrieved complete.");
+
+      // Listen for guild settings changes from dashboard
+      client.logger.info("Listening for guild settings changes...");
+
+      for (const guild of client.guilds.cache.values()) {
+        watchGuildData(client, guild, (guildData) =>
+          synchronizeGuildData(client, guild, guildData),
+        );
       }
 
-      get(chatRef).then((snapshot) => updateChatData(snapshot))
-      onValue(chatRef, (snapshot) => updateChatData(snapshot))
-
-      client.logger.info('Chat data retrieved complete.')
+      client.logger.info(
+        { guilds: client.guilds.cache.size },
+        "Per-guild settings listeners active.",
+      );
 
       // Send all commands information
-      client.logger.info('Sending details of all commands...')
+      client.logger.info("Sending details of all commands...");
 
       try {
-        const commandsRef = child(ref(getDatabase(), 'information'), 'commands')
-        const contextsRef = child(ref(getDatabase(), 'information'), 'contexts')
+        const commandsRef = child(
+          ref(getDatabase(), "information"),
+          "commands",
+        );
+        const contextsRef = child(
+          ref(getDatabase(), "information"),
+          "contexts",
+        );
 
-        update(commandsRef, Object.fromEntries(client.temp.commands))
-        update(contextsRef, Object.fromEntries(client.temp.contexts))
+        update(commandsRef, Object.fromEntries(client.temp.commands));
+        update(contextsRef, Object.fromEntries(client.temp.contexts));
 
-        client.logger.info('Completed to sending details of all commands.')
+        client.logger.info("Completed to sending details of all commands.");
       } catch (error) {
-        client.logger.error(error, 'Failed to sending details of all commands.')
+        client.logger.error(
+          error,
+          "Failed to sending details of all commands.",
+        );
       }
 
       // Send bot statistics.
-      client.logger.info('Sending statistical information...')
+      client.logger.info("Sending statistical information...");
 
-      setInterval(() => fetchStatistics('POST', 'size', client), 10000)
+      const isPrimaryShard = !client.shard || client.shard.ids.includes(0);
+      if (isPrimaryShard) {
+        const submitStatistics = () => {
+          if (!client.isReady()) return;
+          fetchStatistics("POST", "size", client).catch((error) =>
+            client.logger.error(error, "Failed to update statistics."),
+          );
+        };
 
-      client.logger.info(
-        'Statistics are sent successfully and updated every 10 seconds.'
-      )
+        submitStatistics();
+        registerInterval(submitStatistics, 300000);
+        client.logger.info("Statistics will be updated every 5 minutes.");
+      }
     } else {
-      client.logger.warn('Unable to connect to the back-ends server.')
+      client.logger.warn("Unable to connect to the back-ends server.");
     }
 
     // Setup bot activity.
@@ -114,64 +162,64 @@ module.exports = {
         guilds: 0,
         members: 0,
         commands: client.commands.size ?? 0,
-      }
+      };
 
-      if (client.shard && client.shard.count) {
+      if (client.shard?.count && process.connected !== false) {
         const results = await Promise.all([
-          client.shard.fetchClientValues('guilds.cache.size'),
+          client.shard.fetchClientValues("guilds.cache.size"),
           client.shard.broadcastEval((cli) =>
-            cli.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0)
+            cli.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0),
           ),
-        ])
+        ]);
         callback.guilds = results[0].reduce(
           (acc, guildCount) => acc + guildCount,
-          0
-        )
+          0,
+        );
         callback.members = results[1].reduce(
           (acc, memberCount) => acc + memberCount,
-          0
-        )
+          0,
+        );
       } else {
-        callback.guilds = client.guilds.cache.size
-        callback.members = client.users.cache.size
+        callback.guilds = client.guilds.cache.size;
+        callback.members = client.users.cache.size;
       }
 
-      return callback
-    }
+      return callback;
+    };
 
-    const statistics = await getStatistics()
+    const statistics = await getStatistics();
     const activities = {
       production: [
         {
-          name: `${currencyFormatter(statistics.guilds, 1)} Server${statistics.guilds === 1 ? '' : 's'}`,
-          url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+          name: `${currencyFormatter(statistics.guilds, 1)} Server${statistics.guilds === 1 ? "" : "s"}`,
+          url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
           type: ActivityType.Streaming,
         },
         {
-          name: '/help',
-          state: '🪺 IS THE EGG',
+          name: "/help",
+          state: "🪺 IS THE EGG",
           type: ActivityType.Watching,
         },
         {
-          name: `${currencyFormatter(statistics.members, 1)} Member${statistics.members === 1 ? '' : 's'}`,
+          name: `${currencyFormatter(statistics.members, 1)} Member${statistics.members === 1 ? "" : "s"}`,
           type: ActivityType.Watching,
         },
         {
-          name: `${currencyFormatter(statistics.commands, 1)} Command${statistics.commands === 1 ? '' : 's'}`,
+          name: `${currencyFormatter(statistics.commands, 1)} Command${statistics.commands === 1 ? "" : "s"}`,
           type: ActivityType.Listening,
         },
       ],
       development: [
         {
-          name: '🧶',
+          name: "🧶",
           type: ActivityType.Playing,
         },
         {
-          name: '/',
+          name: "/",
           type: ActivityType.Listening,
         },
         {
-          name: '📦',
+          name: "📦",
           type: ActivityType.Playing,
         },
         {
@@ -179,91 +227,55 @@ module.exports = {
           type: ActivityType.Custom,
         },
       ],
-    }
+    };
     const activityType =
-      client.mode === 'start' ? activities.production : activities.development
+      client.mode === "start" ? activities.production : activities.development;
 
     client.user.setPresence({
       status: PresenceUpdateStatus.Online,
       afk: false,
       activities: activityType,
-    })
+    });
 
-    setInterval(async () => {
-      const statistics = await getStatistics()
-      const randomIndex = Math.floor(Math.random() * activityType.length)
-      const newActivity = activityType[randomIndex]
+    registerInterval(async () => {
+      if (!client.isReady()) return;
 
-      activities.production[0].name = `${currencyFormatter(statistics.guilds, 1)} Server${statistics.guilds === 1 ? '' : 's'}`
-      activities.production[2].name = `${currencyFormatter(statistics.members, 1)} Member${statistics.members === 1 ? '' : 's'}`
-      client.user.setActivity(newActivity)
-    }, 10000)
+      try {
+        const statisticsData = await getStatistics();
+        const randomIndex = Math.floor(Math.random() * activityType.length);
+        const newActivity = activityType[randomIndex];
 
-    // Anti-bot system
-    setInterval(async () => {
-      const guilds = await client.guilds.fetch()
-
-      guilds.forEach(async (guild) => {
-        const guildRef = child(ref(getDatabase(), 'guilds'), guild.id)
-        const guildSnapshot = await get(guildRef)
-
-        if (guildSnapshot.exists()) {
-          const antiBotData = guildSnapshot.val().antibot
-
-          if (!antiBotData) return
-
-          const antiBotEnabledStartTime = new Date(
-            antiBotData.enabledAt
-          ).getTime()
-          const antiBotEnabledEndTime = new Date().getTime()
-          const antiBotEnabledPassed =
-            antiBotEnabledStartTime - antiBotEnabledEndTime
-
-          if (antiBotEnabledPassed >= 10) {
-            const members = await guilds.members.fetch()
-
-            if (!antiBotData.enable) return
-
-            members.forEach((member) => {
-              if (member.user.bot) {
-                if (
-                  !antiBotData.all &&
-                  antiBotData.bots.includes(member.user.id)
-                )
-                  return
-                if (member.id !== client.user.id)
-                  return member.kick({
-                    reason: client.i18n.t('events.ready.prevented_anti_bot'),
-                  })
-              }
-            })
-          }
-        }
-      })
-    }, 10000)
+        activities.production[0].name = `${currencyFormatter(statisticsData.guilds, 1)} Server${statisticsData.guilds === 1 ? "" : "s"}`;
+        activities.production[2].name = `${currencyFormatter(statisticsData.members, 1)} Member${statisticsData.members === 1 ? "" : "s"}`;
+        client.user.setActivity(newActivity);
+      } catch (error) {
+        if (error.code === "ERR_IPC_CHANNEL_CLOSED") return;
+        client.logger.error(error, "Failed to update bot activity.");
+      }
+    }, 10000);
 
     // If everything is ready to go
     const webhookLogEmbed = new EmbedBuilder()
       .setColor(Colors.Green)
-      .setTitle('✅・Ready')
-      .setDescription('Bot is ready to work on the servers!')
+      .setTitle("✅・Ready")
+      .setDescription("Bot is ready to work on the servers!")
       .setTimestamp()
       .setFields([
         {
-          name: '⌛ Time',
+          name: "⌛ Time",
           value: `${(client.temp.startup.end - client.temp.startup.start) / 1000}s`,
           inline: true,
         },
-      ])
+      ]);
 
     webhookSend(client.configs.logger.ready, {
       embeds: [webhookLogEmbed],
-    })
-    client.temp.startup.end = new Date().getTime()
+    });
+    client.temp.startup.end = new Date().getTime();
     client.logger.info(
       `Bot is ready to work on the servers!: ${
         (client.temp.startup.end - client.temp.startup.start) / 1000
-      }s`
-    )
+      }s`,
+    );
   },
-}
+};

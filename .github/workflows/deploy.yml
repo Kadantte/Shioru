@@ -1,0 +1,133 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create .env from secrets
+        run: |
+          for variable in TOKEN API_KEY AUTH_DOMAIN DATABASE_URL PROJECT_ID STORAGE_BUCKET MESSAGING_SENDER_ID APP_ID MEASUREMENT_ID AUTH_EMAIL AUTH_PASSWORD; do
+            if [ -z "${!variable}" ]; then
+              echo "Required secret $variable is not configured."
+              exit 1
+            fi
+          done
+
+          envsubst < .env.example > .env.production
+        env:
+          TOKEN: ${{ secrets.TOKEN }}
+          API_KEY: ${{ secrets.API_KEY }}
+          AUTH_DOMAIN: ${{ secrets.AUTH_DOMAIN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PROJECT_ID: ${{ secrets.PROJECT_ID }}
+          STORAGE_BUCKET: ${{ secrets.STORAGE_BUCKET }}
+          MESSAGING_SENDER_ID: ${{ secrets.MESSAGING_SENDER_ID }}
+          APP_ID: ${{ secrets.APP_ID }}
+          MEASUREMENT_ID: ${{ secrets.MEASUREMENT_ID }}
+          AUTH_EMAIL: ${{ secrets.AUTH_EMAIL }}
+          AUTH_PASSWORD: ${{ secrets.AUTH_PASSWORD }}
+          MONITOR_API_KEY: ${{ secrets.MONITOR_API_KEY }}
+          MONITOR_METRIC_ID: ${{ secrets.MONITOR_METRIC_ID }}
+          MONITOR_PAGE_ID: ${{ secrets.MONITOR_PAGE_ID }}
+          TOP_GG_TOKEN: ${{ secrets.TOP_GG_TOKEN }}
+          TRANSLATION_BASE_URL: ${{ secrets.TRANSLATION_BASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+          OPENAI_ORGANIZATION: ${{ secrets.OPENAI_ORGANIZATION }}
+          OPENAI_PROJECT: ${{ secrets.OPENAI_PROJECT }}
+          OPEN_WEATHER_TOKEN: ${{ secrets.OPEN_WEATHER_TOKEN }}
+
+      - name: Setup server
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            export NVM_DIR="$HOME/.nvm"
+
+            # Install system dependencies
+            PACKAGES=""
+            command -v make &> /dev/null || PACKAGES="$PACKAGES build-essential"
+            command -v g++ &> /dev/null || PACKAGES="$PACKAGES build-essential"
+            command -v python3 &> /dev/null || PACKAGES="$PACKAGES python3"
+            command -v ffmpeg &> /dev/null || PACKAGES="$PACKAGES ffmpeg"
+            if [ -n "$PACKAGES" ]; then
+              sudo apt-get update && sudo apt-get install -y $PACKAGES
+            fi
+
+            # Install Node.js via nvm
+            if [ ! -d "$NVM_DIR" ]; then
+              curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash
+            fi
+            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+            nvm install 22
+            nvm use 22
+
+            # Install pm2 and modules
+            npm install -g pm2
+            npx pm2 install pm2-server-monit
+            npx pm2 install pm2-logrotate
+
+            # Clone repo if first deploy
+            if [ ! -d ~/app/.git ]; then
+              rm -rf ~/app
+              git clone https://github.com/Maseshi/Shioru.git ~/app
+            fi
+
+            cd ~/app
+            git checkout main
+            git pull --ff-only origin main
+
+      - name: Copy .env to server
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: ".env.production"
+          target: "~/app"
+
+      - name: Install and restart
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+            nvm use 22
+
+            cd ~/app
+            install -m 600 .env.production .env
+            rm .env.production
+            npm ci --omit=dev
+            npx pm2 startOrRestart ecosystem.config.js --env production --log-type raw
+            npx pm2 save
+
+            for attempt in $(seq 1 30); do
+              if node -e "fetch('http://127.0.0.1:3000/health').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"; then
+                echo "Production health check passed."
+                exit 0
+              fi
+              sleep 2
+            done
+
+            npx pm2 logs shioru --lines 100 --nostream
+            echo "Production health check failed."
+            exit 1

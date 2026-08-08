@@ -1,13 +1,16 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js')
 const {
-  getDatabase,
-  ref,
-  child,
-  get,
-  update,
-  remove,
-} = require('firebase/database')
-const { catchError } = require('../../utils/consoleUtils')
+  SlashCommandBuilder,
+  PermissionFlagsBits,
+  InteractionContextType,
+  ApplicationIntegrationType,
+} = require("discord.js");
+const { getDatabase, ref, child } = require("firebase/database");
+const { getGuildData } = require("../../utils/cacheUtils");
+const { catchError } = require("../../utils/consoleUtils");
+const {
+  trackedRemove: remove,
+  trackedUpdate: update,
+} = require("../../utils/metricsUtils");
 
 module.exports = {
   permissions: [
@@ -15,122 +18,116 @@ module.exports = {
     PermissionFlagsBits.ChangeNickname,
   ],
   data: new SlashCommandBuilder()
-    .setName('afk')
-    .setDescription('Go AFK within your server.')
-    .setDescriptionLocalizations({
-      th: 'ไป AFK ภายในเซิร์ฟเวอร์ของคุณ',
-    })
+    .setName("afk")
+    .setDescription("Go AFK within your server.")
+    .setDescriptionLocalizations({ th: "ไป AFK ภายในเซิร์ฟเวอร์ของคุณ" })
     .setDefaultMemberPermissions()
-    .setDMPermission(false)
+    .setContexts([
+      InteractionContextType.Guild,
+      InteractionContextType.PrivateChannel,
+    ])
+    .setIntegrationTypes([ApplicationIntegrationType.GuildInstall])
     .addSubcommand((subcommand) =>
       subcommand
-        .setName('set')
-        .setDescription('Set your status to AFK.')
-        .setDescriptionLocalizations({
-          th: 'ตั้งสถานะของคุณเป็น AFK',
-        })
+        .setName("set")
+        .setDescription("Set your status to AFK.")
+        .setDescriptionLocalizations({ th: "ตั้งสถานะของคุณเป็น AFK" })
         .addStringOption((option) =>
           option
-            .setName('message')
+            .setName("message")
             .setDescription("The reason you'll be AFK.")
             .setDescriptionLocalizations({
-              th: 'เหตุผลที่คุณจะไม่อยู่ที่หน้าจอ (AFK)',
+              th: "เหตุผลที่คุณจะไม่อยู่ที่หน้าจอ (AFK)",
             })
-            .setRequired(false)
-        )
+            .setRequired(false),
+        ),
     )
     .addSubcommand((subcommand) =>
       subcommand
-        .setName('remove')
-        .setDescription('Unset your status to AFK.')
-        .setDescriptionLocalizations({
-          th: 'ยกเลิกตั้งสถานะของคุณเป็น AFK',
-        })
+        .setName("remove")
+        .setDescription("Unset your status to AFK.")
+        .setDescriptionLocalizations({ th: "ยกเลิกตั้งสถานะของคุณเป็น AFK" }),
     ),
   async execute(interaction) {
-    const subcommand = interaction.options.getSubcommand()
-    const inputMessage = interaction.options.getString('message') ?? ''
+    const subcommand = interaction.options.getSubcommand();
+    const inputMessage = interaction.options.getString("message") ?? "";
 
-    const guildRef = child(ref(getDatabase(), 'guilds'), interaction.guild.id)
-    const guildSnapshot = await get(guildRef)
+    const guildRef = child(ref(getDatabase(), "guilds"), interaction.guild.id);
+    const guildData = getGuildData(interaction.client, interaction.guild.id);
 
-    const nickname = interaction.member.nickname || interaction.user.username
+    const nickname = interaction.member.nickname || interaction.user.username;
 
     switch (subcommand) {
-      case 'set':
-        if (guildSnapshot.exists()) {
-          const guildData = guildSnapshot.val()
-
+      case "set":
+        if (guildData) {
           if (guildData.afk && guildData.afk[interaction.user.id]) {
             return await interaction.reply({
-              content: interaction.client.i18n.t('commands.afk.currently_afk'),
+              content: interaction.client.i18n.t("commands.afk.currently_afk"),
               ephemeral: true,
-            })
+            });
           }
         }
 
-        await update(child(guildRef, interaction.user.id), {
+        await update(child(child(guildRef, "afk"), interaction.user.id), {
           message: inputMessage,
           nickname: nickname,
-        })
+        });
 
         try {
-          await interaction.member.setNickname('[AFK] ' + nickname)
+          await interaction.member.setNickname("[AFK] " + nickname);
         } catch (error) {
           catchError(
             interaction.client,
             interaction,
             module.exports.data.name,
             error,
-            true
-          )
+            true,
+          );
         }
 
         await interaction.reply({
-          content: interaction.client.i18n.t('commands.afk.now_afk'),
+          content: interaction.client.i18n.t("commands.afk.now_afk"),
           ephemeral: true,
-        })
-        break
-      case 'remove': {
-        if (!guildSnapshot.exists())
+        });
+        break;
+      case "remove": {
+        if (!guildData)
           return await interaction.reply({
-            content: interaction.client.i18n.t('commands.afk.currently_afk'),
+            content: interaction.client.i18n.t("commands.afk.currently_afk"),
             ephemeral: true,
-          })
+          });
 
-        const guildData = guildSnapshot.val()
-
-        if (guildData.afk || guildData.afk[interaction.user.id])
+        if (!guildData.afk || !guildData.afk[interaction.user.id])
           return await interaction.reply({
             content: interaction.client.i18n.t(
-              'commands.afk.currently_not_afk'
+              "commands.afk.currently_not_afk",
             ),
             ephemeral: true,
-          })
+          });
 
-        const afk = guildData.afk
+        const afk = guildData.afk;
 
         try {
           await interaction.member.setNickname(
-            afk[interaction.user.id].nickname
-          )
+            afk[interaction.user.id].nickname,
+          );
         } catch (error) {
           catchError(
             interaction.client,
             interaction,
             module.exports.data.name,
             error,
-            true
-          )
+            true,
+          );
         }
 
-        await remove(child(child(guildRef, 'afk'), interaction.user.id))
+        await remove(child(child(guildRef, "afk"), interaction.user.id));
         await interaction.reply({
-          content: interaction.client.i18n.t('commands.afk.now_not_afk'),
+          content: interaction.client.i18n.t("commands.afk.now_not_afk"),
           ephemeral: true,
-        })
-        break
+        });
+        break;
       }
     }
   },
-}
+};

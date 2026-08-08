@@ -12,28 +12,29 @@ cat << "EOF"
 ┃ don't want to continue, you can Ctrl + C       ┃
 ┃ or ^C.                                         ┃
 ┃                                                ┃
-┃ Will install: curl, fnm, git, default-jre,     ┃
-┃ python3, ffmpeg, build-essential,              ┃
-┃ libcairo2-dev, libpango1.0-dev, libjpeg-dev    ┃
-┃ libgif-dev and librsvg2-dev                    ┃
+┃ Will install: curl, git, unzip, python3,       ┃
+┃ ffmpeg, build-essential, and Node.js (nvm)     ┃
 ┃                                                ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 EOF
 echo
 
 echo Updating system packages and installing required packages...
-sudo apt-get update && sudo apt-get install curl git default-jre python3 ffmpeg build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev -y
-curl -fsSL https://fnm.vercel.app/install | bash
-fnm use --install-if-missing 20
+sudo apt-get update && sudo apt-get install -y curl git python3 ffmpeg build-essential
 echo
 
-echo Updating NPM to the latest version...
-sudo npm install -g npm@latest
+echo Installing Node.js via nvm...
+export NVM_DIR="$HOME/.nvm"
+if [ ! -d "$NVM_DIR" ]; then
+    curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash
+fi
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+nvm install --lts
 echo
 
-echo Updating and installing depandancies...
-sudo npm install
+echo Updating and installing dependencies...
+npm ci --omit=dev
 echo
 
 echo Starting up the system...
-sudo -E npm start
+npm start

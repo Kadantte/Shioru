@@ -2,169 +2,412 @@ const {
   SlashCommandBuilder,
   EmbedBuilder,
   PermissionFlagsBits,
-} = require('discord.js')
+  InteractionContextType,
+  ApplicationIntegrationType,
+  Colors,
+  MessageFlags,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+} = require("discord.js");
+const { newLines } = require("../../utils/miscUtils");
+const { catchError } = require("../../utils/consoleUtils");
 
 module.exports = {
   permissions: [PermissionFlagsBits.SendMessages],
   data: new SlashCommandBuilder()
-    .setName('queue')
-    .setDescription('Check songs in the queue')
-    .setDescriptionLocalizations({
-      th: 'ตรวจสอบเพลงในคิว',
-    })
+    .setName("queue")
+    .setDescription("Check songs in the queue")
+    .setDescriptionLocalizations({ th: "ตรวจสอบเพลงในคิว" })
     .setDefaultMemberPermissions()
-    .setDMPermission(false),
+    .setContexts([
+      InteractionContextType.Guild,
+      InteractionContextType.PrivateChannel,
+    ])
+    .setIntegrationTypes([
+      ApplicationIntegrationType.GuildInstall,
+      ApplicationIntegrationType.UserInstall,
+    ]),
   async execute(interaction) {
-    const queue = interaction.client.player.getQueue(interaction)
+    const queue = interaction.client.player.getQueue(interaction);
 
-    if (!queue)
+    if (!queue) {
       return await interaction.reply(
-        interaction.client.i18n.t('commands.queue.no_queue')
-      )
+        interaction.client.i18n.t("commands.queue.no_queue"),
+      );
+    }
 
-    const queueList = queue.songs
-      .map(
-        (song, id) =>
-          id + '. ' + song.name + ' - `' + song.formattedDuration + '`'
-      )
-      .slice(1, 10)
-      .join('\n')
-    const queuePreviousList = queue.previousSongs
-      .map(
-        (song, id) =>
-          id + 1 + '. ' + song.name + ' - `' + song.formattedDuration + '`'
-      )
-      .slice(0, 10)
-      .join('\n')
-    const queueCreatedTimestamp = queue.createdTimestamp
-    const queueAuthorUid = queue.songs[0].user.id
-    const queueAuthorUsername = queue.songs[0].user.username
-    const queueAuthorAvatar = queue.songs[0].user.avatar
-    const avatarURL =
-      'https://cdn.discordapp.com/avatars/' +
-      queueAuthorUid +
-      '/' +
-      queueAuthorAvatar +
-      '.webp'
+    function controller(currentQueue) {
+      const currentSong = currentQueue.songs[0];
 
-    const musicCurrent = queue.songs[0].name
-    const musicURL = queue.songs[0].url
+      const duration = currentSong.stream?.playFromSource
+        ? currentSong.duration
+        : currentSong.stream?.song?.duration || currentSong.duration;
+      const durationCurrent = currentQueue.currentTime;
+      const durationPercentage = Math.round((durationCurrent / duration) * 100);
+      const durationBars = [
+        "🔘▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+        "▬🔘▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+        "▬▬🔘▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+        "▬▬▬🔘▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+        "▬▬▬▬🔘▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+        "▬▬▬▬▬🔘▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+        "▬▬▬▬▬▬🔘▬▬▬▬▬▬▬▬▬▬▬▬▬",
+        "▬▬▬▬▬▬▬🔘▬▬▬▬▬▬▬▬▬▬▬▬",
+        "▬▬▬▬▬▬▬▬🔘▬▬▬▬▬▬▬▬▬▬▬",
+        "▬▬▬▬▬▬▬▬▬🔘▬▬▬▬▬▬▬▬▬▬",
+        "▬▬▬▬▬▬▬▬▬▬🔘▬▬▬▬▬▬▬▬▬",
+        "▬▬▬▬▬▬▬▬▬▬▬🔘▬▬▬▬▬▬▬▬",
+        "▬▬▬▬▬▬▬▬▬▬▬▬🔘▬▬▬▬▬▬▬",
+        "▬▬▬▬▬▬▬▬▬▬▬▬▬🔘▬▬▬▬▬▬",
+        "▬▬▬▬▬▬▬▬▬▬▬▬▬▬🔘▬▬▬▬▬",
+        "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬🔘▬▬▬▬",
+        "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬🔘▬▬▬",
+        "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬🔘▬▬",
+        "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬🔘▬",
+        "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬🔘",
+      ];
+      const durationBarIndex = Math.min(
+        Math.floor(durationPercentage / 5),
+        durationBars.length - 1,
+      );
+      const durationLine = durationBars[durationBarIndex];
 
-    let durationLine
-    const duration = queue.songs[0].duration
-    const durationCurrent = queue.currentTime
-    const durationPercentage = Math.round((durationCurrent / duration) * 100)
-    if (durationPercentage >= 0 && durationPercentage <= 5)
-      durationLine = '🔘▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬'
-    if (durationPercentage >= 5 && durationPercentage <= 10)
-      durationLine = '▬🔘▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬'
-    if (durationPercentage >= 10 && durationPercentage <= 15)
-      durationLine = '▬▬🔘▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬'
-    if (durationPercentage >= 15 && durationPercentage <= 20)
-      durationLine = '▬▬▬🔘▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬'
-    if (durationPercentage >= 20 && durationPercentage <= 25)
-      durationLine = '▬▬▬▬🔘▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬'
-    if (durationPercentage >= 25 && durationPercentage <= 30)
-      durationLine = '▬▬▬▬▬🔘▬▬▬▬▬▬▬▬▬▬▬▬▬▬'
-    if (durationPercentage >= 30 && durationPercentage <= 35)
-      durationLine = '▬▬▬▬▬▬🔘▬▬▬▬▬▬▬▬▬▬▬▬▬'
-    if (durationPercentage >= 35 && durationPercentage <= 40)
-      durationLine = '▬▬▬▬▬▬▬🔘▬▬▬▬▬▬▬▬▬▬▬▬'
-    if (durationPercentage >= 40 && durationPercentage <= 45)
-      durationLine = '▬▬▬▬▬▬▬▬🔘▬▬▬▬▬▬▬▬▬▬▬'
-    if (durationPercentage >= 45 && durationPercentage <= 50)
-      durationLine = '▬▬▬▬▬▬▬▬▬🔘▬▬▬▬▬▬▬▬▬▬'
-    if (durationPercentage >= 50 && durationPercentage <= 55)
-      durationLine = '▬▬▬▬▬▬▬▬▬▬🔘▬▬▬▬▬▬▬▬▬'
-    if (durationPercentage >= 55 && durationPercentage <= 60)
-      durationLine = '▬▬▬▬▬▬▬▬▬▬▬🔘▬▬▬▬▬▬▬▬'
-    if (durationPercentage >= 60 && durationPercentage <= 65)
-      durationLine = '▬▬▬▬▬▬▬▬▬▬▬▬🔘▬▬▬▬▬▬▬'
-    if (durationPercentage >= 65 && durationPercentage <= 70)
-      durationLine = '▬▬▬▬▬▬▬▬▬▬▬▬▬🔘▬▬▬▬▬▬'
-    if (durationPercentage >= 70 && durationPercentage <= 75)
-      durationLine = '▬▬▬▬▬▬▬▬▬▬▬▬▬▬🔘▬▬▬▬▬'
-    if (durationPercentage >= 75 && durationPercentage <= 80)
-      durationLine = '▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬🔘▬▬▬▬'
-    if (durationPercentage >= 80 && durationPercentage <= 85)
-      durationLine = '▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬🔘▬▬▬'
-    if (durationPercentage >= 85 && durationPercentage <= 90)
-      durationLine = '▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬🔘▬▬'
-    if (durationPercentage >= 90 && durationPercentage <= 95)
-      durationLine = '▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬🔘▬'
-    if (durationPercentage >= 95 && durationPercentage <= 100)
-      durationLine = '▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬🔘'
+      const musicAction = currentQueue.paused ? "▶️" : "⏸️";
 
-    const durationFormat = queue.songs[0].formattedDuration
-    const durationCurrentFormat = queue.formattedCurrentTime
-    const durationCount =
-      durationCurrentFormat + ' / ' + durationFormat + ' - ' + duration
+      const durationFormat = currentSong.formattedDuration;
+      const durationCurrentFormat = currentQueue.formattedCurrentTime;
+      const musicDuration = `${durationCurrentFormat} / ${durationFormat} \`${duration}\``;
 
-    const musicPaused = interaction.client.player.paused ? '▶' : '▐▐'
-    const musicAction = ' ◄◄⠀' + musicPaused + '⠀►► '
+      const volume = currentQueue.volume;
+      const musicVolume =
+        volume === 0
+          ? "🔇 ○───"
+          : volume <= 30
+            ? "🔈 ─○──"
+            : volume <= 70
+              ? "🔉 ──○─"
+              : "🔊 ───○";
+      const musicVolumePercent = currentQueue.volume;
 
-    let musicControl
-    const musicVolume = queue.volume
-    if (musicVolume === 0) musicControl = '🔇 ○───'
-    if (musicVolume >= 0 && musicVolume <= 30) musicControl = '🔈 ─○──'
-    if (musicVolume >= 30 && musicVolume <= 70) musicControl = '🔉 ──○─'
-    if (musicVolume >= 70 && musicVolume <= 100) musicControl = '🔊 ───○'
+      const musicRepeat =
+        currentQueue.repeatMode === 1
+          ? "🔁"
+          : currentQueue.repeatMode === 2
+            ? "🔀"
+            : "";
 
-    const musicRepeat =
-      queue.repeatMode === 0 ? '' : queue.repeatMode === 1 ? '🔁' : '🔂'
+      const musicAutoplay = currentQueue.autoplay ? "📻" : "";
 
-    const musicAutoplay = queue.autoplay
-      ? '\n' + interaction.client.i18n.t('commands.queue.autoplay')
-      : ''
+      const musicFilter = currentQueue.filters.names.length
+        ? newLines(
+            interaction.client.i18n.t("commands.queue.filter"),
+            `\`\`\`${currentQueue.filters.names.join(", ")}\`\`\``,
+          )
+        : "";
 
-    const musicFilter =
-      queue.filters.names.length > 0
-        ? '\n' +
-          interaction.client.i18n
-            .t('commands.queue.filter')
-            .replace('%s', queue.filters.names.join(', '))
-        : ''
+      const musicDisplay = newLines(
+        durationLine,
+        `${musicAction} ${musicDuration} ${musicVolume} \`${musicVolumePercent}%\` ${musicRepeat}${musicAutoplay}`,
+        musicFilter,
+      );
 
-    const musicDisplay =
-      durationLine +
-      '\n' +
-      durationCount +
-      ' ' +
-      musicAction +
-      ' ' +
-      musicControl +
-      ' ' +
-      musicRepeat +
-      musicAutoplay +
-      musicFilter
+      const queueList = currentQueue.songs
+        .slice(1, 10)
+        .map(
+          (song, id) =>
+            `${id + 1}. ${song.name} - \`${song.formattedDuration}\``,
+        )
+        .join("\n");
+      const queuePreviousList = currentQueue.previousSongs
+        .slice(0, 10)
+        .map(
+          (song, id) =>
+            `${id + 1}. ${song.name} - \`${song.formattedDuration}\``,
+        )
+        .join("\n");
 
-    const queueEmbed = new EmbedBuilder()
-      .setTitle(musicCurrent)
-      .setURL(musicURL)
-      .setDescription(
-        queue.songs.length === 1
-          ? musicDisplay
-          : musicDisplay +
-              '\n\n' +
-              interaction.client.i18n.t('commands.queue.waiting_in_queue') +
-              '\n' +
-              queueList +
-              (queue.previousSongs.length === 1
-                ? '\n\n' +
-                  interaction.client.i18n.t('commands.queue.previous_queue') +
-                  '\n' +
-                  queuePreviousList
-                : '')
-      )
-      .setColor('Blue')
-      .setTimestamp(queueCreatedTimestamp)
-      .setFooter({
-        text: interaction.client.i18n
-          .t('commands.queue.owner_this_queue')
-          .replace('%s', queueAuthorUsername),
-        iconURL: avatarURL,
-      })
+      const descriptionParts = [musicDisplay];
 
-    await interaction.reply({ embeds: [queueEmbed] })
+      if (currentQueue.songs.length > 1) {
+        descriptionParts.push(
+          "\n" + interaction.client.i18n.t("commands.queue.waiting_in_queue"),
+          queueList,
+        );
+      }
+      if (currentQueue.previousSongs.length > 0) {
+        descriptionParts.push(
+          "\n" + interaction.client.i18n.t("commands.queue.previous_queue"),
+          queuePreviousList,
+        );
+      }
+
+      const queueAuthorUid = currentSong.user.id;
+      const queueAuthorUsername = currentSong.user.username;
+      const queueAuthorAvatar = currentSong.user.avatar;
+      const avatarURL = `https://cdn.discordapp.com/avatars/${queueAuthorUid}/${queueAuthorAvatar}.webp`;
+
+      const queueEmbed = new EmbedBuilder()
+        .setTitle(currentSong.name)
+        .setURL(currentSong.url)
+        .setDescription(descriptionParts.join("\n"))
+        .setColor(Colors.Blue)
+        .setThumbnail(currentSong.thumbnail)
+        .setTimestamp(currentQueue.createdTimestamp)
+        .setFooter({
+          text: interaction.client.i18n.t("commands.queue.owner_this_queue", {
+            username: queueAuthorUsername,
+          }),
+          iconURL: avatarURL,
+        });
+
+      const queueRow = new ActionRowBuilder();
+      const repeatModes = [
+        {
+          emoji: "➡️",
+          style: ButtonStyle.Secondary,
+        },
+        {
+          emoji: "🔁",
+          style: ButtonStyle.Primary,
+        },
+        {
+          emoji: "🔀",
+          style: ButtonStyle.Primary,
+        },
+      ];
+
+      if (currentQueue.previousSongs.length > 0) {
+        queueRow.addComponents(
+          new ButtonBuilder()
+            .setCustomId("music_previous")
+            .setStyle(ButtonStyle.Primary)
+            .setEmoji("⏮️"),
+        );
+      }
+
+      queueRow.addComponents(
+        new ButtonBuilder()
+          .setCustomId("music_play_pause")
+          .setStyle(
+            currentQueue.paused ? ButtonStyle.Secondary : ButtonStyle.Primary,
+          )
+          .setEmoji(currentQueue.paused ? "▶️" : "⏸️"),
+        new ButtonBuilder()
+          .setCustomId("music_stop")
+          .setStyle(ButtonStyle.Danger)
+          .setEmoji("⏹️"),
+        new ButtonBuilder()
+          .setCustomId("music_skip")
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji("⏭️"),
+        new ButtonBuilder()
+          .setCustomId("music_repeat")
+          .setStyle(repeatModes[currentQueue.repeatMode].style)
+          .setEmoji(repeatModes[currentQueue.repeatMode].emoji),
+        new ButtonBuilder()
+          .setCustomId("music_autoplay")
+          .setStyle(
+            !currentQueue.autoplay
+              ? ButtonStyle.Secondary
+              : ButtonStyle.Primary,
+          )
+          .setEmoji("📻"),
+      );
+
+      return { queueEmbed, queueRow };
+    }
+
+    const { queueEmbed, queueRow } = controller(queue);
+
+    await interaction.reply({ embeds: [queueEmbed], components: [queueRow] });
+
+    // Set collector timeout to match the queue's total duration (in ms), fallback to 60s if unavailable
+    const queueDurationMs = (queue.duration || 60) * 1000;
+    const collector = interaction.channel.createMessageComponentCollector({
+      filter: (inter) => inter.user.id === interaction.user.id,
+      time: queueDurationMs,
+    });
+
+    const updateEmbed = async () => {
+      const currentQueue = interaction.client.player.getQueue(interaction);
+
+      if (!currentQueue) return;
+
+      const currentQueueDurationMs = (queue.duration || 60) * 1000;
+      const { queueEmbed: updatedEmbed, queueRow: updatedRow } =
+        controller(currentQueue);
+
+      collector.resetTimer({ time: currentQueueDurationMs });
+
+      try {
+        await interaction.editReply({
+          embeds: [updatedEmbed],
+          components: [updatedRow],
+        });
+      } catch {
+        // pass
+      }
+    };
+
+    const player = interaction.client.player;
+    const queueId = queue.id || interaction.guildId || interaction.channelId;
+    // Update embed every 5 seconds
+    const intervalId = setInterval(updateEmbed, 5000);
+
+    const onFinishSong = async (currentQueue) => {
+      if (
+        (currentQueue.id ||
+          currentQueue.guild?.id ||
+          currentQueue.channel?.id) === queueId
+      ) {
+        await updateEmbed();
+      }
+    };
+    const onAddSong = async (currentQueue) => {
+      if (
+        (currentQueue.id ||
+          currentQueue.guild?.id ||
+          currentQueue.channel?.id) === queueId
+      ) {
+        await updateEmbed();
+      }
+    };
+    const onAddList = async (currentQueue) => {
+      if (
+        (currentQueue.id ||
+          currentQueue.guild?.id ||
+          currentQueue.channel?.id) === queueId
+      ) {
+        await updateEmbed();
+      }
+    };
+    const onDeleteQueue = async (currentQueue) => {
+      if (
+        (currentQueue.id ||
+          currentQueue.guild?.id ||
+          currentQueue.channel?.id) === queueId
+      ) {
+        try {
+          await interaction.editReply({ components: [] });
+        } catch {
+          // pass
+        }
+      }
+    };
+    const onFinish = async (currentQueue) => {
+      if (
+        (currentQueue.id ||
+          currentQueue.guild?.id ||
+          currentQueue.channel?.id) === queueId
+      ) {
+        await updateEmbed();
+      }
+    };
+
+    player.on("finishSong", onFinishSong);
+    player.on("addSong", onAddSong);
+    player.on("addList", onAddList);
+    player.on("deleteQueue", onDeleteQueue);
+    player.on("finish", onFinish);
+
+    collector.on("collect", async (inter) => {
+      try {
+        const currentQueue = interaction.client.player.getQueue(inter);
+
+        if (!currentQueue) {
+          await inter.reply({
+            content: interaction.client.i18n.t("commands.queue.no_queue"),
+            ephemeral: true,
+          });
+          return;
+        }
+
+        switch (inter.customId) {
+          case "music_previous": {
+            if (currentQueue.previousSongs.length > 0) {
+              await currentQueue.previous();
+              await updateEmbed();
+            } else {
+              await inter.reply({
+                content: interaction.client.i18n.t(
+                  "commands.queue.no_previous_song",
+                ),
+                flags: MessageFlags.Ephemeral,
+              });
+            }
+            break;
+          }
+          case "music_play_pause": {
+            if (currentQueue.paused) {
+              await currentQueue.resume();
+            } else {
+              await currentQueue.pause();
+            }
+            await updateEmbed();
+            await inter.deferUpdate();
+            break;
+          }
+          case "music_stop": {
+            await currentQueue.stop();
+            collector.stop();
+            break;
+          }
+          case "music_skip": {
+            if (currentQueue.songs.length > 1) {
+              await currentQueue.skip();
+              await updateEmbed();
+              await inter.deferUpdate();
+            } else {
+              await inter.reply({
+                content: interaction.client.i18n.t(
+                  "commands.queue.no_next_song",
+                ),
+                flags: MessageFlags.Ephemeral,
+              });
+            }
+            break;
+          }
+          case "music_repeat": {
+            const nextRepeatMode = (currentQueue.repeatMode + 1) % 3;
+            await currentQueue.setRepeatMode(nextRepeatMode);
+            await updateEmbed();
+            await inter.deferUpdate();
+            break;
+          }
+          case "music_autoplay": {
+            currentQueue.toggleAutoplay(!currentQueue.autoplay);
+            await updateEmbed();
+            await inter.deferUpdate();
+            break;
+          }
+        }
+      } catch (error) {
+        catchError(
+          interaction.client,
+          interaction,
+          module.exports.data.name,
+          error,
+          true,
+        );
+      }
+    });
+    collector.on("end", async () => {
+      try {
+        await interaction.editReply({ components: [] });
+      } catch {
+        // pass
+      }
+
+      // Remove listeners to prevent memory leaks
+      player.off("finishSong", onFinishSong);
+      player.off("addSong", onAddSong);
+      player.off("addList", onAddList);
+      player.off("deleteQueue", onDeleteQueue);
+      player.off("finish", onFinish);
+
+      // Clear interval to stop updating embeds
+      if (intervalId) clearInterval(intervalId);
+    });
   },
-}
+};

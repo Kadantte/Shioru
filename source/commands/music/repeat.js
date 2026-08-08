@@ -1,73 +1,87 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js')
+const {
+  SlashCommandBuilder,
+  PermissionFlagsBits,
+  InteractionContextType,
+  ApplicationIntegrationType,
+} = require("discord.js");
 
 module.exports = {
   permissions: [PermissionFlagsBits.SendMessages],
   data: new SlashCommandBuilder()
-    .setName('repeat')
-    .setDescription('Toggle repeating playback mode.')
-    .setDescriptionLocalizations({
-      th: 'สลับโหมดของการเล่นเพลงซ้ำ',
-    })
+    .setName("repeat")
+    .setDescription("Toggle repeating playback mode.")
+    .setDescriptionLocalizations({ th: "สลับโหมดของการเล่นเพลงซ้ำ" })
     .setDefaultMemberPermissions()
-    .setDMPermission(false)
+    .setContexts([
+      InteractionContextType.Guild,
+      InteractionContextType.PrivateChannel,
+    ])
+    .setIntegrationTypes([
+      ApplicationIntegrationType.GuildInstall,
+      ApplicationIntegrationType.UserInstall,
+    ])
     .addIntegerOption((option) =>
       option
-        .setName('mode')
-        .setDescription('The mode to set the repeat to')
-        .setDescriptionLocalizations({
-          th: 'โหมดการตั้งค่าการทำซ้ำเป็น',
-        })
+        .setName("mode")
+        .setDescription("The mode to set the repeat to")
+        .setDescriptionLocalizations({ th: "โหมดการตั้งค่าการทำซ้ำเป็น" })
         .setRequired(true)
         .addChoices(
-          { name: 'Disable', value: 0 },
-          { name: 'Repeat in Song', value: 1 },
-          { name: 'Repeat in Queue', value: 2 }
+          { name: "Disable", value: 0 },
+          { name: "Repeat in Song", value: 1 },
+          { name: "Repeat in Queue", value: 2 },
         )
         .setMinValue(0)
-        .setMaxValue(2)
+        .setMaxValue(2),
     ),
   async execute(interaction) {
-    const inputMode = interaction.options.getInteger('mode')
+    const inputMode = interaction.options.getInteger("mode");
 
-    const djs = interaction.client.configs.djs
-    const queue = interaction.client.player.getQueue(interaction)
+    const djs = require("../../utils/cacheUtils").getGuildDjs(
+      interaction.client,
+      interaction.guildId,
+    );
+    const queue = interaction.client.player.getQueue(interaction);
 
     if (!queue)
       return await interaction.reply(
-        interaction.client.i18n.t('commands.repeat.no_queue')
-      )
+        interaction.client.i18n.t("commands.repeat.no_queue"),
+      );
     if (djs.enable) {
       if (
         interaction.user.id !== queue.songs[0].user.id &&
         queue.autoplay === false
       )
         return await interaction.reply(
-          interaction.client.i18n.t('commands.repeat.not_owner')
-        )
+          interaction.client.i18n.t("commands.repeat.not_owner"),
+        );
       if (
-        djs.users.includes(interaction.user.id) &&
-        djs.roles.includes(
-          interaction.member.roles.cache.map((role) => role.id)
+        !djs.users.includes(interaction.user.id) &&
+        !interaction.member.roles.cache.some((role) =>
+          djs.roles.includes(role.id),
         ) &&
         djs.only
       )
         return await interaction.reply(
-          interaction.client.i18n.t('commands.repeat.not_a_dj')
-        )
+          interaction.client.i18n.t("commands.repeat.not_a_dj"),
+        );
     }
 
-    const mode = interaction.client.player.setRepeatMode(interaction, inputMode)
+    const mode = interaction.client.player.setRepeatMode(
+      interaction,
+      inputMode,
+    );
     await interaction.reply(
       interaction.client.i18n
-        .t('commands.repeat.repeated')
+        .t("commands.repeat.repeated")
         .replace(
-          '%s',
+          "%s",
           mode
             ? mode == 2
-              ? interaction.client.i18n.t('commands.repeat.repeat_queue')
-              : interaction.client.i18n.t('commands.repeat.repeat_song')
-            : interaction.client.i18n.t('commands.repeat.off')
-        )
-    )
+              ? interaction.client.i18n.t("commands.repeat.repeat_queue")
+              : interaction.client.i18n.t("commands.repeat.repeat_song")
+            : interaction.client.i18n.t("commands.repeat.off"),
+        ),
+    );
   },
-}
+};

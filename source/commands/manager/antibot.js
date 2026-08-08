@@ -1,74 +1,77 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js')
 const {
-  getDatabase,
-  ref,
-  child,
-  get,
-  update,
-  remove,
-} = require('firebase/database')
+  SlashCommandBuilder,
+  PermissionFlagsBits,
+  InteractionContextType,
+  ApplicationIntegrationType,
+} = require("discord.js");
+const { getDatabase, ref, child } = require("firebase/database");
+const { getGuildData } = require("../../utils/cacheUtils");
+const {
+  trackedRemove: remove,
+  trackedUpdate: update,
+} = require("../../utils/metricsUtils");
 
 module.exports = {
   permissions: [PermissionFlagsBits.SendMessages],
   data: new SlashCommandBuilder()
-    .setName('antibot')
-    .setDescription('Prevent other bots from joining the server.')
-    .setDescriptionLocalizations({
-      th: 'ป้องกันบอทตัวอื่นเข้าร่วมเซิร์ฟเวอร์',
-    })
+    .setName("antibot")
+    .setDescription("Prevent other bots from joining the server.")
+    .setDescriptionLocalizations({ th: "ป้องกันบอทตัวอื่นเข้าร่วมเซิร์ฟเวอร์" })
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-    .setDMPermission(false)
+    .setContexts([
+      InteractionContextType.Guild,
+      InteractionContextType.PrivateChannel,
+    ])
+    .setIntegrationTypes([ApplicationIntegrationType.GuildInstall])
     .addSubcommand((subcommand) =>
       subcommand
-        .setName('enable')
-        .setDescription('Do not allow other bots to join this server.')
+        .setName("enable")
+        .setDescription("Do not allow other bots to join this server.")
         .setDescriptionLocalizations({
-          th: 'ห้ามไม่ให้บอทตัวอื่นเข้าร่วมเซิร์ฟเวอร์นี้',
+          th: "ห้ามไม่ให้บอทตัวอื่นเข้าร่วมเซิร์ฟเวอร์นี้",
         })
         .addBooleanOption((option) =>
           option
-            .setName('all')
-            .setDescription('Against every bot on this server except yourself.')
+            .setName("all")
+            .setDescription("Against every bot on this server except yourself.")
             .setDescriptionLocalizations({
-              th: 'ต่อต้านบอททุกตัวที่อยู่ในเซิร์ฟเวอร์นี้ยกเว้นตัวเอง',
-            })
-        )
+              th: "ต่อต้านบอททุกตัวที่อยู่ในเซิร์ฟเวอร์นี้ยกเว้นตัวเอง",
+            }),
+        ),
     )
     .addSubcommand((subcommand) =>
       subcommand
-        .setName('disable')
-        .setDescription('Stop prohibiting other bots from joining this server.')
+        .setName("disable")
+        .setDescription("Stop prohibiting other bots from joining this server.")
         .setDescriptionLocalizations({
-          th: 'หยุดห้ามบอทตัวอื่นเข้าร่วมเซิร์ฟเวอร์นี้',
-        })
+          th: "หยุดห้ามบอทตัวอื่นเข้าร่วมเซิร์ฟเวอร์นี้",
+        }),
     ),
   async execute(interaction) {
-    const subcommand = interaction.options.getSubcommand()
-    const inputAll = interaction.options.getBoolean('all') ?? false
+    const subcommand = interaction.options.getSubcommand();
+    const inputAll = interaction.options.getBoolean("all") ?? false;
 
-    const guildRef = child(ref(getDatabase(), 'guilds'), interaction.guild.id)
-    const guildSnapshot = await get(guildRef)
+    const guildRef = child(ref(getDatabase(), "guilds"), interaction.guild.id);
+    const guildData = getGuildData(interaction.client, interaction.guild.id);
 
     switch (subcommand) {
-      case 'enable': {
-        const bots = []
+      case "enable": {
+        const bots = [];
 
-        if (guildSnapshot.exists()) {
-          const guildData = guildSnapshot.val()
-
+        if (guildData) {
           if (guildData.antibot && guildData.antibot.enable)
             return await interaction.reply(
               interaction.client.i18n.t(
-                'commands.antibot.antibot_is_currently_enabled'
-              )
-            )
+                "commands.antibot.antibot_is_currently_enabled",
+              ),
+            );
         }
         if (!inputAll) {
-          const members = await interaction.guild.members.fetch()
+          const members = await interaction.guild.members.fetch();
 
           members.forEach((member) => {
-            if (member.user.bot) bots.push(member.id)
-          })
+            if (member.user.bot) bots.push(member.id);
+          });
         }
 
         await update(guildRef, {
@@ -79,35 +82,33 @@ module.exports = {
             bots: inputAll ? [] : bots,
             all: inputAll,
           },
-        })
+        });
         await interaction.reply(
           inputAll
             ? interaction.client.i18n.t(
-                'commands.antibot.antibot_and_kick_all_bot'
+                "commands.antibot.antibot_and_kick_all_bot",
               )
-            : interaction.client.i18n.t('commands.antibot.enable_antibot')
-        )
-        break
+            : interaction.client.i18n.t("commands.antibot.enable_antibot"),
+        );
+        break;
       }
-      case 'disable': {
-        if (!guildSnapshot.exists())
+      case "disable": {
+        if (!guildData)
           return await interaction.reply(
-            interaction.client.i18n.t('commands.antibot.currently_disable')
-          )
-
-        const guildData = guildSnapshot.val()
+            interaction.client.i18n.t("commands.antibot.currently_disable"),
+          );
 
         if (!guildData.antibot || !guildData.antibot.enable)
           return await interaction.reply(
-            interaction.client.i18n.t('commands.antibot.currently_enable')
-          )
+            interaction.client.i18n.t("commands.antibot.currently_enable"),
+          );
 
-        await remove(child(guildRef, 'antibot'))
+        await remove(child(guildRef, "antibot"));
         await interaction.reply(
-          interaction.client.i18n.t('commands.antibot.disable_antibot')
-        )
-        break
+          interaction.client.i18n.t("commands.antibot.disable_antibot"),
+        );
+        break;
       }
     }
   },
-}
+};
